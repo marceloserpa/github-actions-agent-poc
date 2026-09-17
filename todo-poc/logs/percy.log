@@ -1,0 +1,6 @@
+[90m2026-09-14T11:10:46.133Z[39m [32mDEBUG[39m [97m@wdio/browserstack-service[39m Starting percy
+[90m2026-09-14T11:10:47.037Z[39m [31mERROR[39m [97m@wdio/browserstack-service[39m Unable to fetch percy project token
+[90m2026-09-14T11:10:47.096Z[39m [32mDEBUG[39m [97m@wdio/browserstack-service[39m Error in percy setup Error: Could not start percy, check percy logs for info.
+    at BrowserstackLauncherService.setupPercy (/Users/marceloserpa/Projects/frontend-pocs/todo-poc/node_modules/@wdio/browserstack-service/build/index.js:19629:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async BrowserstackLauncherService.onPrepare (/Users/marceloserpa/Projects/frontend-pocs/todo-poc/node_modules/@wdio/browserstack-service/build/index.js:19432:9)
