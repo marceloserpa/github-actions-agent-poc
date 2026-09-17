@@ -18,7 +18,10 @@ async function press(selector: string, durationMs: number) {
     .down()
     .pause(durationMs)
     .up()
-    .perform();
+    // BrowserStack's iOS real-device WDA doesn't implement the W3C
+    // `DELETE /session/:id/actions` endpoint that `perform()` calls
+    // automatically afterwards, so skip it — each call starts a fresh chain.
+    .perform(true);
 }
 
 const tap = (selector: string) => press(selector, 300);
