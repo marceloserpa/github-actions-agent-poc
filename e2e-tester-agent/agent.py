@@ -5,41 +5,45 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
 from datetime import datetime,timezone
-import httpx
-from mcp.client.streamable_http import streamable_http_client
 from strands import Agent
-from strands.tools.mcp.mcp_client import MCPClient
 from strands_tools import file_read, editor, shell
 
-
-GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-
-github_mcp_client = MCPClient(lambda: streamable_http_client(
-    GITHUB_MCP_URL,
-    http_client=httpx.AsyncClient(
-        headers={
-            "Authorization": f"Bearer {os.environ['GITHUB_PERSONAL_ACCESS_TOKEN']}",
-            "X-MCP-Toolsets": "repos,pull_requests",
-        },
-    ),
-))
-
-strands_agent: Agent
-
-REPO_OWNER = "marceloserpa"
-REPO_NAME = "github-actions-agent-poc"
-REPO_PROJECT_SOURCE="todo-poc"
+from tools import (
+    get_latest_browserstack_app_id,
+    execute_ios_test_spec
+)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global strands_agent
-    with github_mcp_client:
-        strands_agent = Agent(tools=[*github_mcp_client.list_tools_sync(), shell, file_read, editor])
-        yield
+app = FastAPI(title="Strands Agent Server", version="1.0.0")
 
+# System prompt forcing direct, native function calling
+SYSTEM_PROMPT = """You are an automated QA Engineer Agent specializing in iOS e2e testing.
 
-app = FastAPI(title="Strands Agent Server", version="1.0.0", lifespan=lifespan)
+CRITICAL INSTRUCTIONS FOR TOOL USAGE:
+1. You have direct execution privileges for all provided tools.
+2. DO NOT ask for user permission or print messages like "Invoking tool..." or "Confirming tool availability...".
+3. Execute function calls immediately via native tool call payloads.
+4. Project root folder: ../todo-poc/
+5. Tests folder: ../todo-poc/e2e/
+
+Your required execution workflow:
+Step 1: Execute `get_latest_browserstack_app_id` to get the target app_url.
+Step 2: Inspect ../todo-poc/e2e/ to find the required e2e test spec.
+Step 3: Execute `execute_ios_test_spec` passing the spec name and app_url.
+Step 4: Output the final test summary once the tools finish running.
+"""
+
+# Initialize Strands agent WITH tools at creation time
+strands_agent = Agent(
+    system_prompt=SYSTEM_PROMPT,
+    tools=[
+        file_read,
+        editor,
+        shell,
+        get_latest_browserstack_app_id,
+        execute_ios_test_spec,
+    ],
+)
 
 class InvocationRequest(BaseModel):
     input: Dict[str, Any]
@@ -58,43 +62,16 @@ async def invoke_agent(request: InvocationRequest):
                 detail="No prompt found in input. Please provide a 'prompt' key in the input."
             )
 
+        # Build prompt incorporating user scenario
         prompt = f"""
-        You are a QA agent. The React Native project at {REPO_PROJECT_SOURCE} uses Appium to run e2e tests. 
-        Tests are located into e2e/, src/ contains the source code and in the README.md has all 
-        information you need to run tests.
-        
-        You have access to GitHub MCP tools scoped to the repos and pull_requests toolsets.
-        Target repository: {REPO_OWNER}/{REPO_NAME}
+        User Task: {user_scenario}
 
-        Rules:
-
-        1. NEVER commit directly to the default branch.
-        2. NEVER merge the pull request yourself - only open it.
-        3. You can only use browserstack to run the tests.
-        4. NEVER create, modify, or open a pull request for GitHub Actions workflows, CI/CD
-           config, or any repository file unless the task below explicitly asks you to change
-           code. Running tests does not require any repository changes.
-        5. If a task step doesn't require writing to the repository, don't use the repos or
-           pull_requests tools at all.
-
-        Task:
-
-        1. Find the spec inside {REPO_PROJECT_SOURCE}.
-        2. Run the spec.
-        3. Print a message with the results.
-
-        Do not open a pull request as part of this task.
+        Execute the testing workflow now using your tools.
         """
 
-        
-        #user_message = request.input.get("prompt", "")
-        #if not user_message:
-        #    raise HTTPException(
-        #        status_code=400,
-        #        detail="No prompt found in input. Please provide a 'prompt' key in the input."
-        #    )
-
+        # Call agent (tools are already attached)
         result = strands_agent(prompt)
+
         response = {
             "message": result.message,
             "timestamp": datetime.now(timezone.utc).isoformat(),
