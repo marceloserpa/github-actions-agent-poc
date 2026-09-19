@@ -17,7 +17,10 @@ GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 github_mcp_client = MCPClient(lambda: streamable_http_client(
     GITHUB_MCP_URL,
     http_client=httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {os.environ['GITHUB_PERSONAL_ACCESS_TOKEN']}"},
+        headers={
+            "Authorization": f"Bearer {os.environ['GITHUB_PERSONAL_ACCESS_TOKEN']}",
+            "X-MCP-Toolsets": "repos,pull_requests",
+        },
     ),
 ))
 
@@ -65,16 +68,22 @@ async def invoke_agent(request: InvocationRequest):
 
         Rules:
 
-        1. NEVER commit directly to the default branch. 
+        1. NEVER commit directly to the default branch.
         2. NEVER merge the pull request yourself - only open it.
         3. You can only use browserstack to run the tests.
+        4. NEVER create, modify, or open a pull request for GitHub Actions workflows, CI/CD
+           config, or any repository file unless the task below explicitly asks you to change
+           code. Running tests does not require any repository changes.
+        5. If a task step doesn't require writing to the repository, don't use the repos or
+           pull_requests tools at all.
 
         Task:
-        
+
         1. Find the spec inside {REPO_PROJECT_SOURCE}.
         2. Run the spec.
         3. Print a message with the results.
 
+        Do not open a pull request as part of this task.
         """
 
         
