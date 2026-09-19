@@ -1,0 +1,37 @@
+name: E2E Tests – BrowserStack
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa/run-e2e-browserstack
+
+jobs:
+  e2e-browserstack:
+    name: Run Appium E2E on BrowserStack
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: todo-poc
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: todo-poc/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E tests on BrowserStack
+        env:
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          BROWSERSTACK_APP_PATH: ${{ secrets.BROWSERSTACK_APP_PATH }}
+        run: npm run test:bstack
