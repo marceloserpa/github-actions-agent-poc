@@ -1,7 +1,9 @@
 import os
 import json
+import re
 import requests
 import subprocess
+from datetime import datetime
 from strands import tool
 
 # Cap on any single tool result so a verbose test/log output can never blow
@@ -115,6 +117,110 @@ def read_file(path: str, root_dir: str = "/tmp/workspace/repo") -> str:
     except OSError as e:
         return f"Error: Could not read file '{path}': {e}"
     return _truncate_head(content)
+
+
+@tool
+def write_spec_file(
+    spec_file_name: str,
+    content: str,
+    specs_dir: str = "/tmp/workspace/repo/todo-poc/e2e/specs",
+) -> str:
+    """
+    Writes `content` as the full contents of `spec_file_name` inside specs_dir,
+    creating or overwriting it. Confined to specs_dir only — cannot write
+    anywhere else in the repo. Use this after generating or revising a spec's
+    full file content, then run it with execute_ios_test_spec.
+    """
+    if not spec_file_name.endswith((".spec.ts", ".spec.js")):
+        return f"Error: spec_file_name must end in .spec.ts or .spec.js, got '{spec_file_name}'."
+    try:
+        resolved = _resolve_within(specs_dir, spec_file_name)
+    except ValueError as e:
+        return f"Error: {e}"
+    try:
+        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+        with open(resolved, "w", encoding="utf-8") as f:
+            f.write(content)
+    except OSError as e:
+        return f"Error: Could not write file '{spec_file_name}': {e}"
+    return f"Wrote {len(content)} chars to {resolved}"
+
+
+_PR_COMMIT_AUTHOR_NAME = "e2e-tester-agent"
+_PR_COMMIT_AUTHOR_EMAIL = os.environ.get("GIT_COMMIT_AUTHOR_EMAIL", "jdev.marcelo@gmail.com")
+
+
+@tool
+def open_pull_request(
+    spec_file_name: str,
+    branch_name: str,
+    pr_title: str,
+    pr_body: str,
+    last_test_result: str,
+    repo_url: str,
+    target_dir: str = "/tmp/workspace/repo",
+    base_branch: str = "main",
+) -> str:
+    """
+    Commits the single spec file `spec_file_name` (under todo-poc/e2e/specs),
+    pushes it to a new branch, and opens a GitHub pull request against
+    base_branch. Only call this once, immediately after execute_ios_test_spec
+    has returned a "SUCCESS:" result for this exact spec — pass that exact,
+    unmodified result string as last_test_result; the tool refuses otherwise.
+    branch_name is a short kebab-case slug you choose (e.g.
+    "add-two-lists-isolation-test") — a timestamp suffix is appended
+    automatically so repeated runs never collide.
+    """
+    if not last_test_result.startswith("SUCCESS:"):
+        return "Error: refusing to open a pull request — last_test_result does not start with 'SUCCESS:'."
+    if not spec_file_name.endswith((".spec.ts", ".spec.js")):
+        return f"Error: spec_file_name must end in .spec.ts or .spec.js, got '{spec_file_name}'."
+
+    token = os.environ["GITHUB_TOKEN"]
+
+    match = re.search(r"github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?$", repo_url.rstrip("/"))
+    if not match:
+        return f"Error: could not parse owner/repo from repo_url '{repo_url}'."
+    owner, repo = match.group(1), match.group(2)
+
+    specs_dir = os.path.join(target_dir, "todo-poc", "e2e", "specs")
+    try:
+        resolved_spec = _resolve_within(specs_dir, spec_file_name)
+    except ValueError as e:
+        return f"Error: {e}"
+    spec_rel_path = os.path.relpath(resolved_spec, target_dir)
+
+    unique_branch = f"{branch_name}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+    commit_env = os.environ.copy()
+    commit_env["GIT_AUTHOR_NAME"] = _PR_COMMIT_AUTHOR_NAME
+    commit_env["GIT_AUTHOR_EMAIL"] = _PR_COMMIT_AUTHOR_EMAIL
+    commit_env["GIT_COMMITTER_NAME"] = _PR_COMMIT_AUTHOR_NAME
+    commit_env["GIT_COMMITTER_EMAIL"] = _PR_COMMIT_AUTHOR_EMAIL
+
+    steps = [
+        ["git", "-C", target_dir, "checkout", "-b", unique_branch],
+        ["git", "-C", target_dir, "add", "--", spec_rel_path],
+        ["git", "-C", target_dir, "commit", "-m", pr_title, "-m", pr_body],
+        ["git", "-C", target_dir, "push", "-u", "origin", unique_branch],
+    ]
+    for cmd in steps:
+        result = subprocess.run(cmd, capture_output=True, text=True, env=commit_env)
+        if result.returncode != 0:
+            return f"Error: {_truncate(_redact(result.stderr, token))}"
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    payload = {"title": pr_title, "body": pr_body, "head": unique_branch, "base": base_branch}
+    try:
+        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+    except requests.RequestException as e:
+        return f"Error: {_redact(str(e), token)}"
+
+    if response.status_code >= 300:
+        return f"Error: GitHub API returned {response.status_code}: {_truncate(_redact(response.text, token))}"
+
+    return response.json().get("html_url", "PR opened but no URL returned.")
 
 
 @tool
