@@ -22,7 +22,7 @@ curl -X POST http://localhost:8080/invocations \
 
 
 # Build the image
-docker buildx build --platform linux/arm64 -t my-agent:arm64 --load .
+docker buildx build --platform linux/arm64 -t e2e-tester-agent:arm64 --load .
 
 # Test locally with credentials
 docker run --platform linux/arm64 -p 8080:8080 \
@@ -30,7 +30,10 @@ docker run --platform linux/arm64 -p 8080:8080 \
   -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
   -e AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
   -e AWS_REGION="$AWS_REGION" \
-  my-agent:arm64
+  -e BROWSERSTACK_USERNAME="$BROWSERSTACK_USERNAME" \
+  -e BROWSERSTACK_ACCESS_KEY="$BROWSERSTACK_ACCESS_KEY" \
+  -e GITHUB_TOKEN="$GITHUB_TOKEN" \
+  e2e-tester-agent:arm64
 
 
 
