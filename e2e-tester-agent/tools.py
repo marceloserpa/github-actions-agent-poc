@@ -20,6 +20,29 @@ def _redact(text: str, secret: str) -> str:
     return text.replace(secret, "***") if secret else text
 
 
+# Larger cap for file reads — source files routinely exceed the 4000-char
+# tool-output cap, and unlike log/stderr output, the START of a file (imports,
+# top of a component) matters more than the end, so this truncates from the
+# tail instead of the head like `_truncate` does.
+_MAX_FILE_CHARS = 12000
+
+
+def _truncate_head(text: str, limit: int = _MAX_FILE_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    omitted = len(text) - limit
+    return text[:limit] + f"\n...[{omitted} chars omitted]..."
+
+
+def _resolve_within(root: str, rel_or_abs_path: str) -> str:
+    root_real = os.path.realpath(root)
+    candidate = rel_or_abs_path if os.path.isabs(rel_or_abs_path) else os.path.join(root, rel_or_abs_path)
+    resolved = os.path.realpath(candidate)
+    if resolved != root_real and not resolved.startswith(root_real + os.sep):
+        raise ValueError(f"Path '{rel_or_abs_path}' escapes the allowed root '{root}'.")
+    return resolved
+
+
 @tool
 def clone_repo(repo_url: str, target_dir: str = "/tmp/workspace/repo", branch: str = "main") -> str:
     """
@@ -50,20 +73,48 @@ def clone_repo(repo_url: str, target_dir: str = "/tmp/workspace/repo", branch: s
 
 
 @tool
-def list_e2e_specs(specs_dir: str = "/tmp/workspace/repo/todo-poc/e2e/specs") -> str:
+def list_directory(path: str, root_dir: str = "/tmp/workspace/repo") -> str:
     """
-    Lists the available e2e test spec file names in the given directory.
-    Use this instead of generic shell/file exploration to find spec files.
+    Lists files and subdirectories directly under `path` (relative to root_dir,
+    or an absolute path inside it). Filters out node_modules and .git. Use this
+    to explore the repo structure before reading specific files with read_file.
     """
     try:
-        entries = sorted(os.listdir(specs_dir))
+        resolved = _resolve_within(root_dir, path)
+    except ValueError as e:
+        return f"Error: {e}"
+    try:
+        entries = sorted(os.listdir(resolved))
     except OSError as e:
-        return f"Error: Could not list spec directory '{specs_dir}': {e}"
+        return f"Error: Could not list directory '{path}': {e}"
 
-    specs = [f for f in entries if f.endswith((".spec.ts", ".spec.js"))]
-    if not specs:
-        return f"No spec files found in '{specs_dir}'."
-    return "\n".join(specs)
+    entries = [e for e in entries if e not in ("node_modules", ".git")]
+    if not entries:
+        return f"'{path}' is empty."
+    lines = [e + ("/" if os.path.isdir(os.path.join(resolved, e)) else "") for e in entries]
+    return _truncate("\n".join(lines))
+
+
+@tool
+def read_file(path: str, root_dir: str = "/tmp/workspace/repo") -> str:
+    """
+    Reads the full text content of a single file at `path` (relative to
+    root_dir, or absolute inside it). Content is truncated if very large.
+    Use this to inspect app source (for testIDs/accessibility identifiers)
+    and existing e2e spec files (for code style and conventions).
+    """
+    try:
+        resolved = _resolve_within(root_dir, path)
+    except ValueError as e:
+        return f"Error: {e}"
+    if not os.path.isfile(resolved):
+        return f"Error: '{path}' is not a file."
+    try:
+        with open(resolved, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except OSError as e:
+        return f"Error: Could not read file '{path}': {e}"
+    return _truncate_head(content)
 
 
 @tool
