@@ -9,7 +9,7 @@ args = parser.parse_args()
 
 agent_core_client = boto3.client('bedrock-agentcore', region_name='us-east-1')
 payload = json.dumps({
-    "input": {"prompt": "Explain machine learning in simple terms"}
+    "input": {"prompt": "Scenario: 1) User create a todo list named weekend tasks. 2) Enter in the details, and add 5 tasks. 3)Mark all as completed. 4) Go back the todo-list management page and should the ‘weekend tasks’ with 5/5.."}
 })
 
 response = agent_core_client.invoke_agent_runtime(

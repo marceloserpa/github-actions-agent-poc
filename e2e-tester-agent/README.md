@@ -46,14 +46,57 @@ docker run --platform linux/arm64 -p 8080:8080 \
 
 #### infra
 
-
-  aws ecr create-repository --repository-name e2e-tester-agent --region us-west-2
-
+```sh
+aws ecr create-repository --repository-name e2e-tester-agent --region us-east-1
+```
 
 #### Build
 
-aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-west-2.amazonaws.com
-docker buildx build --platform linux/arm64 -t <account-id>.dkr.ecr.us-west-2.amazonaws.com/e2e-tester-agent:latest --push .
-aws ecr describe-images --repository-name e2e-tester-agent --region us-west-2
+```sh
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+```
+
+```sh
+docker buildx build --platform linux/arm64 -t $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/e2e-tester-agent:latest --push .
+```
+
+```sh
+aws ecr describe-images --repository-name e2e-tester-agent --region us-east-1
+```
 
 
+
+
+## AWS
+
+
+```sh
+aws secretsmanager create-secret --region us-east-1 \
+  --name e2e-tester-agent/browserstack \
+  --secret-string "{\"username\":\"$BROWSERSTACK_USERNAME\",\"access_key\":\"$BROWSERSTACK_ACCESS_KEY\"}"
+```
+
+```sh
+aws secretsmanager create-secret --region us-east-1 \
+  --name e2e-tester-agent/github \
+  --secret-string "{\"token\":\"$GITHUB_TOKEN\"}"
+```
+
+```sh
+aws iam put-role-policy \
+  --role-name AgentRuntimeRole \
+  --policy-name SecretsManagerAccess \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": "secretsmanager:GetSecretValue",
+        "Resource": [
+          "arn:aws:secretsmanager:us-east-1:<<account id>>:secret:e2e-tester-agent/browserstack-*",
+          "arn:aws:secretsmanager:us-east-1:<<account id>>:secret:e2e-tester-agent/github-*"
+        ]
+      }
+    ]
+  }'
+```

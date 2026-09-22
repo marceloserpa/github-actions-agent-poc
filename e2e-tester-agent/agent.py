@@ -1,6 +1,8 @@
+import json
 import os
 from contextlib import asynccontextmanager
 
+import boto3
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
@@ -18,6 +20,26 @@ from tools import (
     execute_ios_test_spec
 )
 
+
+def _load_secrets_from_secrets_manager():
+    """Populate BrowserStack/GitHub env vars from Secrets Manager if not
+    already set (e.g. via `docker run -e ...` for local testing)."""
+    if os.environ.get("BROWSERSTACK_USERNAME") and os.environ.get("GITHUB_TOKEN"):
+        return
+
+    client = boto3.client("secretsmanager", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+
+    if not os.environ.get("BROWSERSTACK_USERNAME"):
+        bstack = json.loads(client.get_secret_value(SecretId="e2e-tester-agent/browserstack")["SecretString"])
+        os.environ["BROWSERSTACK_USERNAME"] = bstack["username"]
+        os.environ["BROWSERSTACK_ACCESS_KEY"] = bstack["access_key"]
+
+    if not os.environ.get("GITHUB_TOKEN"):
+        github = json.loads(client.get_secret_value(SecretId="e2e-tester-agent/github")["SecretString"])
+        os.environ["GITHUB_TOKEN"] = github["token"]
+
+
+_load_secrets_from_secrets_manager()
 
 app = FastAPI(title="Strands Agent Server", version="1.0.0")
 
