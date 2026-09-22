@@ -129,7 +129,12 @@ scenario (e.g. "Add e2e test for task isolation between two lists"). pr_body
 should include a short description of the scenario covered, explicit
 confirmation that it passed on BrowserStack (quote the SUCCESS line), the
 spec file path that changed, and a one-line note if a corrective rewrite was
-needed before it passed.
+needed before it passed. If last_test_result contains "BrowserStack Session:"
+and/or "BrowserStack Video:" lines, include both as a "## Test Recording"
+section in pr_body with markdown links, e.g. "[Watch test video](<video_url>)"
+(note: this link may expire before the BrowserStack dashboard's 30-day
+recording retention window ends) and "[View BrowserStack session](<session_url>)"
+(requires BrowserStack login, stays valid as long as the session exists).
 """
 
 # Initialize Strands agent WITH tools at creation time

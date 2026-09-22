@@ -247,12 +247,51 @@ def get_latest_browserstack_app_id(custom_id: str = None) -> str:
             
     return "Error: Could not retrieve latest app_url from BrowserStack."
 
+
+_BSTACK_SESSION_URL_RE = re.compile(
+    r"app-automate\.browserstack\.com/builds/[a-f0-9]+/sessions/([a-f0-9]+)"
+)
+
+
+def _get_browserstack_recording_links(stdout: str) -> str:
+    """
+    Best-effort: pulls the BrowserStack session id out of raw (untruncated)
+    wdio stdout and resolves it to a video_url/browser_url via the App
+    Automate REST API. Returns a markdown snippet to append to the tool
+    result, or "" if anything about this fails — this must never break the
+    caller's SUCCESS/FAILURE result.
+    """
+    match = _BSTACK_SESSION_URL_RE.search(stdout)
+    if not match:
+        return ""
+    session_id = match.group(1)
+    try:
+        response = requests.get(
+            f"https://api-cloud.browserstack.com/app-automate/sessions/{session_id}.json",
+            auth=(os.environ["BROWSERSTACK_USERNAME"], os.environ["BROWSERSTACK_ACCESS_KEY"]),
+            timeout=30,
+        )
+        response.raise_for_status()
+        session = response.json().get("automation_session", {})
+        video_url = session.get("video_url")
+        browser_url = session.get("browser_url")
+    except (requests.RequestException, ValueError, KeyError):
+        return ""
+
+    lines = []
+    if browser_url:
+        lines.append(f"BrowserStack Session: {browser_url}")
+    if video_url:
+        lines.append(f"BrowserStack Video: {video_url}")
+    return ("\n" + "\n".join(lines)) if lines else ""
+
+
 @tool
 def execute_ios_test_spec(repo_dir: str, spec_file_name: str, app_url: str) -> str:
     """
-    Executes the generated spec file against BrowserStack real iOS devices 
+    Executes the generated spec file against BrowserStack real iOS devices
     using the provided BrowserStack app_url (bs://...).
-    """    
+    """
     env = os.environ.copy()
     env["BROWSERSTACK_APP_PATH"] = app_url
     env["PLATFORM"] = "ios"
@@ -265,7 +304,8 @@ def execute_ios_test_spec(repo_dir: str, spec_file_name: str, app_url: str) -> s
     test_res = subprocess.run(test_cmd, cwd=repo_dir, capture_output=True, text=True, env=env)
 
     if test_res.returncode == 0:
-        return f"SUCCESS: Test passed on BrowserStack!\nOutput:\n{_truncate(test_res.stdout)}"
+        links = _get_browserstack_recording_links(test_res.stdout)
+        return f"SUCCESS: Test passed on BrowserStack!{links}\nOutput:\n{_truncate(test_res.stdout)}"
     else:
         return (
             f"FAILURE: Test failed on BrowserStack.\n"
