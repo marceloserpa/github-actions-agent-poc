@@ -8,13 +8,13 @@ Run the application
 uv run uvicorn agent:app --host 0.0.0.0 --port 8080
 ```
 
-Test /ping endpoint
+Test the /ping endpoint
 
 ```sh
 curl http://localhost:8080/ping
 ```
 
-Test /invocations endpoint
+Test the /invocations endpoint
 
 ```sh
 curl -X POST http://localhost:8080/invocations \
@@ -52,31 +52,31 @@ docker run --platform linux/arm64 -p 8080:8080 \
 
 ### Prepare the infrastructure
 
-Create ECR repository
+Create an ECR repository
 
 ```sh
 aws ecr create-repository --repository-name e2e-tester-agent --region us-east-1
 ```
 
-Login into ECR
+Login in to ECR
 
 ```sh
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-Build the docker image and push it to ECR
+Build the Docker image and push it to ECR
 
 ```sh
 docker buildx build --platform linux/arm64 -t $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/e2e-tester-agent:latest --push .
 ```
 
-Verify if the image was uploaded successfully
+Verify that the image was uploaded successfully
 
 ```sh
 aws ecr describe-images --repository-name e2e-tester-agent --region us-east-1
 ```
 
-Create the secrets for BrowserStack and for Github PAT
+Create the secrets for BrowserStack and the Github PAT
 
 ```sh
 aws secretsmanager create-secret --region us-east-1 \
@@ -134,13 +134,10 @@ Scenario:
 4) Go back the todo-list management page and should the 'weekend tasks' with 5/5..
 ```
 
-After completed a pull request will be opened with the new spec created.
+After completion, a pull request will be opened with the new test spec created.
 
 ![](docs/pull-request-opened.png)
 
 Here is a example of BrowserStack recording with the new test case implemented:
 
-
-
 https://github.com/user-attachments/assets/d3f709f4-ab9f-4ca4-b5c0-1924811d9656
-
