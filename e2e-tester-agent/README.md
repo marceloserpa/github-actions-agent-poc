@@ -141,3 +141,9 @@ After completion, a pull request will be opened with the new test spec created.
 Here is a example of BrowserStack recording with the new test case implemented:
 
 https://github.com/user-attachments/assets/d3f709f4-ab9f-4ca4-b5c0-1924811d9656
+
+BrowserStack dashboard:
+
+<img width="900" height="1040" alt="Screenshot 2026-09-23 at 08 11 27" src="https://github.com/user-attachments/assets/ce31a2ff-f183-48c1-8926-b694711779bb" />
+
+
