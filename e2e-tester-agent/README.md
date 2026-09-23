@@ -140,4 +140,7 @@ After completed a pull request will be opened with the new spec created.
 
 Here is a example of BrowserStack recording with the new test case implemented:
 
-![](docs/browserstack-executation-recording.mp4)
+
+
+https://github.com/user-attachments/assets/d3f709f4-ab9f-4ca4-b5c0-1924811d9656
+
